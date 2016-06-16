@@ -3,3 +3,9 @@ support changing directory for group to obviate the need for type same prefixes 
 
 inheritance for params (params <- sub-params <- sub-sub-params)
 params from external *.ini file
+
+support all existed ini groups for set in execute argeument source
+
+remove empty building output files
+
+support splitted build for rule with few group names (separate file for each group)
