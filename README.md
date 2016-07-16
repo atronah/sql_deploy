@@ -5,6 +5,14 @@ Compiles separated sql scripts (procedures, tables, triggers etc) into single sq
 Parse comments
 ==============
 
+
+Compile settings
+================
+
+All settings of compile process stored in [Settings file](docs/settings.md)
+
+
+
 Supported special commands
 --------------------------
 * `\fn <name>`, `\tb <name>`, `\mg <name>`, `\sq <name>`

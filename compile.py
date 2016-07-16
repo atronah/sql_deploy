@@ -52,7 +52,7 @@ def writer(filename, prepend=False):
             logging.info('finished writing to the file: {}'.format(filename))
 
 
-class Worker:
+class RuleProcessor:
     def __init__(self, encoding=DEFAULT_ENCODING):
         self._settings = configparser.ConfigParser()
         self._encoding = encoding
@@ -275,7 +275,7 @@ def main():
 
     logging.getLogger().setLevel(logging.DEBUG)
 
-    worker = Worker()
+    worker = RuleProcessor()
     worker.process(options.dir, options.out, options.rules, options.settings)
 
     return 0

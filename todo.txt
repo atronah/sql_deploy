@@ -1,5 +1,0 @@
-check duplicates during generate script
-support changing directory for group to obviate the need for type same prefixes in scripts
-
-inheritance for params (params <- sub-params <- sub-sub-params)
-params from external *.ini file
