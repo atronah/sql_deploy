@@ -70,9 +70,10 @@ def parse_sctipt_info(content):
     # поиск блока doxygen комментариев, начинающихся с "/*!"
     match = re.search(r'/\*!(.*)\*/', content, flags = re.MULTILINE | re.DOTALL)
     if not match:
-        return info
-    comment_begin, comment_end = match.start(1), match.end(1)
-    other_info_begin = comment_begin
+        return info, 0, 0
+    start, end = match.start(1), match.end(1)
+    pos = start
+    other_info_begin = pos
 
     # поиск названия функции\процедуры
     type_map = {'fn' : ('procedure', 'parameter')
@@ -80,19 +81,19 @@ def parse_sctipt_info(content):
                 , 'tg' : ('trigger', None)
                 , 'sq' : ('sequence', None)}
 
-    match = re.search(r'\\(' + '|'.join(type_map.keys()) + r')\s+(\w+)', content[comment_begin:comment_end])
+    match = re.search(r'\\(' + '|'.join(type_map.keys()) + r')\s+(\w+)', content[pos:end])
     if match:
         info['name'] = match.group(2)
         info['type'], info['param_type'] = type_map[match.group(1)]
-        other_info_begin = max(other_info_begin, comment_begin + match.end() + 1)
+        other_info_begin = max(other_info_begin, pos + match.end() + 1)
 
     # поиск короткого описания
     info['brief'] = None
     pattern = re.compile(r'\\brief\s+(.+?)(?:\\param|(?:^\s*$))', re.S + re.M)
-    match = re.search(pattern, content[comment_begin:comment_end])
+    match = re.search(pattern, content[pos:end])
     if match:
         info['brief'] = match.group(1).strip()
-        other_info_begin = max(other_info_begin, comment_begin + match.end() + 1)
+        other_info_begin = max(other_info_begin, pos + match.end() + 1)
 
     info['inputs'] = []
     info['outputs'] = []
@@ -100,12 +101,12 @@ def parse_sctipt_info(content):
     if info['param_type']:
         pattern = re.compile(r'\\param(?:\[(?P<direction>in|out)\])?\s+(?P<parameter>\w+)\s+(?P<comment>.*)')
 
-        for match in pattern.finditer(content[comment_begin:comment_end]):
+        for match in pattern.finditer(content[pos:end]):
             info['outputs' if match.group('direction') == 'out' else 'inputs'].append(match.groupdict())
-            other_info_begin = max(other_info_begin, comment_begin + match.end() + 1)
+            other_info_begin = max(other_info_begin, pos + match.end() + 1)
 
-    info['description'] = content[other_info_begin:comment_end].strip()
-    return info
+    info['description'] = content[other_info_begin:end].strip()
+    return info, start, end
 
 
 def add_comments_block(content, info):
@@ -135,8 +136,8 @@ def prepareFileContent(fname, encoding, params):
         print('processing file: {}'.format(fname))
 
         content = f.read()
-        script_info = parse_sctipt_info(content)
-
+        script_info, start, end = parse_sctipt_info(content)
+        content = content[:start] + (script_info['brief'] or '') + content[end:]
         content = add_git_info(content, get_git_info(fname))
         content = add_comments_block(content, script_info)
         try:
