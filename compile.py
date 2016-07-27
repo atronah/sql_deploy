@@ -68,7 +68,7 @@ def parse_sctipt_info(content):
         }
 
     # поиск блока doxygen комментариев, начинающихся с "/*!"
-    match = re.search(r'/\*!(.*)\*/', content, flags = re.MULTILINE | re.DOTALL)
+    match = re.search(r'/\*!(.*?)\*/', content, flags = re.MULTILINE | re.DOTALL)
     if not match:
         return info, 0, 0
     start, end = match.start(1), match.end(1)
