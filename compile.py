@@ -8,6 +8,7 @@ import datetime
 import subprocess
 import shlex
 import glob
+import logging
 
 
 
@@ -17,25 +18,36 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
+def add_static_variables(**kwargs):
+    def decorate(fn):
+        for key, val in kwargs.items():
+            setattr(fn, key, val)
+        return fn
+    return decorate
+
+@add_static_variables(cache={})
 def get_git_info(obj_path):
     git_info = {}
-
     obj_path = os.path.abspath(obj_path)
-    workdir = os.path.abspath(os.path.dirname(obj_path))
-    while not os.path.ismount(workdir):
-        if os.path.isdir(os.path.join(workdir, '.git')):
-            for param, command in {'sha': 'git rev-parse HEAD'
-                                    , 'branch': 'git rev-parse --abbrev-ref HEAD'
-                                    , 'author': 'git log -1 --pretty="%an (%ae)" -- "{}"'.format(obj_path)
-                                    , 'date': 'git log -1 --pretty="%ad" -- "{}"'.format(obj_path)
-                                    , 'message': 'git log -1 --pretty=%B -- "{}"'.format(obj_path)
-                                    }.items():
 
-                p = subprocess.Popen(shlex.split(command), stdout = subprocess.PIPE, cwd = workdir)
-                p.wait()
-                git_info[param] = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
-            break
-        workdir = os.path.abspath(os.path.join(workdir, os.pardir))
+    if obj_path in get_git_info.cache:
+        git_info = get_git_info.cache[obj_path]
+    else:
+        workdir = os.path.abspath(os.path.dirname(obj_path))
+        while not os.path.ismount(workdir):
+            if os.path.isdir(os.path.join(workdir, '.git')):
+                for param, command in {'sha': 'git rev-parse HEAD',
+                                       'branch': 'git rev-parse --abbrev-ref HEAD',
+                                       'author': 'git log -1 --pretty="%an (%ae)" -- "{}"'.format(obj_path),
+                                       'date': 'git log -1 --pretty="%ad" -- "{}"'.format(obj_path),
+                                       'message': 'git log -1 --pretty=%B -- "{}"'.format(obj_path)
+                                       }.items():
+                    p = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE, cwd=workdir)
+                    p.wait()
+                    git_info[param] = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
+                break
+            workdir = os.path.abspath(os.path.join(workdir, os.pardir))
+        get_git_info.cache[obj_path] = git_info
     return git_info
 
 
