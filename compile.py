@@ -25,30 +25,39 @@ def add_static_variables(**kwargs):
         return fn
     return decorate
 
-@add_static_variables(cache={})
-def get_git_info(obj_path):
-    git_info = {}
-    obj_path = os.path.abspath(obj_path)
 
-    if obj_path in get_git_info.cache:
-        git_info = get_git_info.cache[obj_path]
-    else:
-        workdir = os.path.abspath(os.path.dirname(obj_path))
-        while not os.path.ismount(workdir):
-            if os.path.isdir(os.path.join(workdir, '.git')):
-                for param, command in {'sha': 'git rev-parse HEAD',
-                                       'branch': 'git rev-parse --abbrev-ref HEAD',
-                                       'author': 'git log -1 --pretty="%an (%ae)" -- "{}"'.format(obj_path),
-                                       'date': 'git log -1 --pretty="%ad" -- "{}"'.format(obj_path),
-                                       'message': 'git log -1 --pretty=%B -- "{}"'.format(obj_path)
-                                       }.items():
-                    p = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE, cwd=workdir)
-                    p.wait()
-                    git_info[param] = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
-                break
-            workdir = os.path.abspath(os.path.join(workdir, os.pardir))
-        get_git_info.cache[obj_path] = git_info
-    return git_info
+@add_static_variables(info_cache={}, sha_cache={})
+def get_git_info(obj_path):
+    obj_path = os.path.abspath(obj_path)
+    workdir = os.path.dirname(obj_path)
+
+    if workdir not in get_git_info.sha_cache:
+        p = subprocess.Popen(shlex.split('git rev-parse HEAD'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        git_sha = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
+        p = subprocess.Popen(shlex.split('git rev-parse --abbrev-ref HEAD'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        branch_name = ''.join((line.decode('utf-8') for line in p.stdout.readlines()))
+        get_git_info.sha_cache[workdir] = git_sha, branch_name
+    git_sha, branch_name = get_git_info.sha_cache[workdir]
+
+    if obj_path not in get_git_info.info_cache:
+        p = subprocess.Popen(shlex.split(f'git log -1 --pretty="%an (%ae)%n%ad%n%B" -- "{obj_path}"'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        result_lines = [line.decode('utf-8') for line in p.stdout.readlines()]
+        if len(result_lines) >= 2:
+            get_git_info.info_cache[obj_path] = result_lines[:2] + ['-'.join(result_lines[2:])]
+        else:
+            get_git_info.info_cache[obj_path] = '', '', ''
+            print(f'Incorrect git info for {obj_path}: {result_lines}, {workdir}')
+    last_changes_author, last_changes_date, last_changes_message = get_git_info.info_cache[obj_path]
+
+    return {'sha': git_sha,
+            'branch': branch_name,
+            'author': last_changes_author,
+            'date': last_changes_date,
+            'message': last_changes_message
+            }
 
 
 def add_git_info(content, git_info):
@@ -60,9 +69,9 @@ def add_git_info(content, git_info):
                             '\n'.join(['-- generated on ' + str(datetime.datetime.now()),
                                         '-- git branch: ' + git_info['branch'],
                                         '-- git SHA-1: ' + git_info['sha'],
-                                        '-- git author: ' + git_info['author'],
-                                        '-- git date: ' + git_info['date'],
-                                        '-- git commit message: ' + git_info['message'].replace('\n', '\n-- \t\t')
+                                        '-- git last changes author: ' + git_info['author'],
+                                        '-- git last changes date: ' + git_info['date'],
+                                        '-- git last changes message: ' + git_info['message'].replace('\n', '\n-- \t\t')
                                         ]).replace('\n\n', '\n'),
                          content[first_begin.end():]
                          ])
