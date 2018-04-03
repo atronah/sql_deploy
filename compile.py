@@ -151,7 +151,7 @@ def add_comments_block(content, info):
                     else content + '\n\n' + '\n'.join(comments)
 
 
-def prepareFileContent(fname, encoding, params):
+def prepareFileContent(fname, encoding, params, add_git_info=True):
     content = ''
     with open(fname, 'r', encoding=encoding) as f:
         print('processing file: {}'.format(fname))
@@ -159,7 +159,8 @@ def prepareFileContent(fname, encoding, params):
         content = f.read()
         script_info, start, end = parse_sctipt_info(content)
         content = content[:start] + (script_info['brief'] or '') + content[end:]
-        content = add_git_info(content, get_git_info(fname))
+        if add_git_info:
+            content = add_git_info(content, get_git_info(fname))
         content = add_comments_block(content, script_info)
         try:
             content = content.format(**params)
@@ -237,6 +238,9 @@ def main():
                         , help='name of sections with additional parameters for update (add/rewrite) parameters from [params] section')
     parser.add_argument('sources', default='default', nargs='*'
                         , help='name of option in [general] section with list of sections with rules for making script or file names')
+    parser.add_argument('--no-git-info', dest='no_git_info', default=False, action='store_true',
+                        help='Do not get git info to put into scripts')
+
     options = parser.parse_args()
 
     template_file = os.path.abspath('template.md')
@@ -269,7 +273,7 @@ def main():
     with open(out_fullname, 'w', encoding = encoding) as o:
         for source in sources:
             for fname in parse_file_names(source, settings):
-                content, info = prepareFileContent(fname, encoding, params)
+                content, info = prepareFileContent(fname, encoding, params, not options.no_git_info)
                 o.write(content + '\n\n')
                 if info['name']:
                     doc_content = makeMarkdown(info, template_file, encoding = encoding)
