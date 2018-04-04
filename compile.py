@@ -8,6 +8,7 @@ import datetime
 import subprocess
 import shlex
 import glob
+import logging
 
 
 
@@ -17,26 +18,46 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
+def add_static_variables(**kwargs):
+    def decorate(fn):
+        for key, val in kwargs.items():
+            setattr(fn, key, val)
+        return fn
+    return decorate
+
+
+@add_static_variables(info_cache={}, sha_cache={})
 def get_git_info(obj_path):
-    git_info = {}
-
     obj_path = os.path.abspath(obj_path)
-    workdir = os.path.abspath(os.path.dirname(obj_path))
-    while not os.path.ismount(workdir):
-        if os.path.isdir(os.path.join(workdir, '.git')):
-            for param, command in {'sha': 'git rev-parse HEAD'
-                                    , 'branch': 'git rev-parse --abbrev-ref HEAD'
-                                    , 'author': 'git log -1 --pretty="%an (%ae)" -- "{}"'.format(obj_path)
-                                    , 'date': 'git log -1 --pretty="%ad" -- "{}"'.format(obj_path)
-                                    , 'message': 'git log -1 --pretty=%B -- "{}"'.format(obj_path)
-                                    }.items():
+    workdir = os.path.dirname(obj_path)
 
-                p = subprocess.Popen(shlex.split(command), stdout = subprocess.PIPE, cwd = workdir)
-                p.wait()
-                git_info[param] = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
-            break
-        workdir = os.path.abspath(os.path.join(workdir, os.pardir))
-    return git_info
+    if workdir not in get_git_info.sha_cache:
+        p = subprocess.Popen(shlex.split('git rev-parse HEAD'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        git_sha = ''.join([line.decode('utf-8') for line in p.stdout.readlines()])
+        p = subprocess.Popen(shlex.split('git rev-parse --abbrev-ref HEAD'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        branch_name = ''.join((line.decode('utf-8') for line in p.stdout.readlines()))
+        get_git_info.sha_cache[workdir] = git_sha, branch_name
+    git_sha, branch_name = get_git_info.sha_cache[workdir]
+
+    if obj_path not in get_git_info.info_cache:
+        p = subprocess.Popen(shlex.split(f'git log -1 --pretty="%an (%ae)%n%ad%n%B" -- "{obj_path}"'), stdout=subprocess.PIPE, cwd=workdir)
+        p.wait()
+        result_lines = [line.decode('utf-8') for line in p.stdout.readlines()]
+        if len(result_lines) >= 2:
+            get_git_info.info_cache[obj_path] = result_lines[:2] + ['-'.join(result_lines[2:])]
+        else:
+            get_git_info.info_cache[obj_path] = '', '', ''
+            print(f'Incorrect git info for {obj_path}: {result_lines}, {workdir}')
+    last_changes_author, last_changes_date, last_changes_message = get_git_info.info_cache[obj_path]
+
+    return {'sha': git_sha,
+            'branch': branch_name,
+            'author': last_changes_author,
+            'date': last_changes_date,
+            'message': last_changes_message
+            }
 
 
 def add_git_info(content, git_info):
@@ -48,9 +69,9 @@ def add_git_info(content, git_info):
                             '\n'.join(['-- generated on ' + str(datetime.datetime.now()),
                                         '-- git branch: ' + git_info['branch'],
                                         '-- git SHA-1: ' + git_info['sha'],
-                                        '-- git author: ' + git_info['author'],
-                                        '-- git date: ' + git_info['date'],
-                                        '-- git commit message: ' + git_info['message'].replace('\n', '\n-- \t\t')
+                                        '-- git last changes author: ' + git_info['author'],
+                                        '-- git last changes date: ' + git_info['date'],
+                                        '-- git last changes message: ' + git_info['message'].replace('\n', '\n-- \t\t')
                                         ]).replace('\n\n', '\n'),
                          content[first_begin.end():]
                          ])
@@ -130,7 +151,7 @@ def add_comments_block(content, info):
                     else content + '\n\n' + '\n'.join(comments)
 
 
-def prepareFileContent(fname, encoding, params):
+def prepareFileContent(fname, encoding, params, put_git_info=True):
     content = ''
     with open(fname, 'r', encoding=encoding) as f:
         print('processing file: {}'.format(fname))
@@ -138,7 +159,8 @@ def prepareFileContent(fname, encoding, params):
         content = f.read()
         script_info, start, end = parse_sctipt_info(content)
         content = content[:start] + (script_info['brief'] or '') + content[end:]
-        content = add_git_info(content, get_git_info(fname))
+        if put_git_info:
+            content = add_git_info(content, get_git_info(fname))
         content = add_comments_block(content, script_info)
         try:
             content = content.format(**params)
@@ -216,6 +238,9 @@ def main():
                         , help='name of sections with additional parameters for update (add/rewrite) parameters from [params] section')
     parser.add_argument('sources', default='default', nargs='*'
                         , help='name of option in [general] section with list of sections with rules for making script or file names')
+    parser.add_argument('--no-git-info', dest='no_git_info', default=False, action='store_true',
+                        help='Do not get git info to put into scripts')
+
     options = parser.parse_args()
 
     template_file = os.path.abspath('template.md')
@@ -248,7 +273,7 @@ def main():
     with open(out_fullname, 'w', encoding = encoding) as o:
         for source in sources:
             for fname in parse_file_names(source, settings):
-                content, info = prepareFileContent(fname, encoding, params)
+                content, info = prepareFileContent(fname, encoding, params, not options.no_git_info)
                 o.write(content + '\n\n')
                 if info['name']:
                     doc_content = makeMarkdown(info, template_file, encoding = encoding)
