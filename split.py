@@ -27,7 +27,7 @@ def main():
 
     create_pattern = re.compile(r'create\s+(?:or\s+alter\s+)?'
                                 r'(procedure|trigger|table|sequence|generator|view|exception|index|domain)\s+'
-                                r'(\w+)')
+                                r'([\w\$]+)')
 
 
     with open(source_filename) as src:
