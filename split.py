@@ -24,7 +24,7 @@ def write_to_file(filename, data_lines):
         else:
             if len(data_lines) == 0:
                 logging.warning(f'Empty script')
-            with open(filename, 'w') as result:
+            with open(filename, 'w', encoding='utf-8') as result:
                 result.writelines(data_lines)
                 return True
     else:
@@ -50,7 +50,7 @@ def main():
                                 r'([\w\$]+)')
 
 
-    with open(source_filename) as src:
+    with open(source_filename, encoding='utf-8') as src:
         line_number, start_line = 0, 0
         result_lines = []
         result_filename, object_type, object_name = None, None, None
