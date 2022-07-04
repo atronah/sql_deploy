@@ -63,7 +63,7 @@ def get_git_info(obj_path):
 def add_git_info(content, git_info):
     if not git_info:
         return content
-    first_begin = re.search(r'\bbegin\b', content, re.IGNORECASE)
+    first_begin = re.search(r'^\s*\bbegin\b\s*$', content, re.IGNORECASE | re.MULTILINE)
     if first_begin:
         return '\n'.join([content[:first_begin.end()],
                             '\n'.join(['-- generated on ' + str(datetime.datetime.now()),
