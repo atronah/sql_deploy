@@ -3,23 +3,24 @@ import sys
 import os
 import logging
 import re
+import glob
 
 logging.getLogger().setLevel(logging.INFO)
 
 def usage():
     print('\n'.join([
             f''
-            f'Usage: {os.path.split(sys.argv[0])[-1]} FILENAME',
+            f'Usage: {os.path.split(sys.argv[0])[-1]} FILENAME [FOLDER_TO_SEARCH_AND_REPLACE]',
             ]))
 
 
-def write_to_file(filename, data_lines):
+def write_to_file(filename, data_lines, replace=False):
     # removes empty lines in the end of file
     while data_lines and not data_lines[-1].strip():
         data_lines.pop()
 
     if filename:
-        if os.path.isfile(filename):
+        if os.path.isfile(filename) and not replace:
             logging.error(f'File {filename} already exists.. skipped')
         else:
             if len(data_lines) == 0:
@@ -34,12 +35,13 @@ def write_to_file(filename, data_lines):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         logging.error('Incorect arguments number')
         usage()
         return 1
 
     source_filename = sys.argv[1]
+    search_folder = sys.argv[2] if len(sys.argv) == 3 else None
 
     if not os.path.isfile(source_filename):
         logging.error(f'File "{source_filename}"" doesn''t exists')
@@ -54,6 +56,7 @@ def main():
         line_number, start_line = 0, 0
         result_lines = []
         result_filename, object_type, object_name = None, None, None
+        replace = False
 
         for l in src.readlines():
             formated_line = l.lower().strip()
@@ -73,17 +76,25 @@ def main():
                             }.get(object_type, 'ukn')
                 # previous file hasn't written yet
                 if result_filename:
-                    if write_to_file(result_filename, result_lines):
+                    if write_to_file(result_filename, result_lines, replace):
                         logging.info(f'Script from lines {start_line}:{line_number}'
                                      f' has been written into file {result_filename}')
                     result_lines = []
                     start_line = line_number
                 # get filename for current object
                 result_filename = f'{prefix}_{object_name}.sql'
+                replace = False
+                if search_folder:
+                    search_pattern = os.path.join(search_folder, '**', result_filename)
+                    search_result = glob.glob(search_pattern, recursive=True)
+                    if (len(search_result) == 1):
+                        result_filename = search_result[0]
+                        replace = True
+
             elif formated_line.startswith('set term ^ ;'):
                 logging.debug(f'The begining of new script has been reached in line: {line_number}')
                 if result_filename:
-                    if write_to_file(result_filename, result_lines):
+                    if write_to_file(result_filename, result_lines, replace):
                         logging.info(f'Script from lines {start_line}:{line_number}'
                                      f' has been written into file {result_filename}')
                     result_filename = None
