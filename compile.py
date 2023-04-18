@@ -216,9 +216,13 @@ def parse_file_names(source, settings):
                 if not fname_pattern:
                     continue
 
+                is_found = False
                 logging.info(f'processing pattern "{fname_pattern}"')
                 for fname in glob.glob(fname_pattern):
+                    is_found = True
                     yield fname
+                if not is_found:
+                    logging.warning(f'file pattern "{fname_pattern}" not found (section: "{section}", )')
     else: #suggest, that source - it is file name or file name pattern
         logging.info(f'processing {source}')
         for fname in glob.glob(source):
