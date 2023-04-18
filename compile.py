@@ -175,10 +175,11 @@ def prepareFileContent(fname, encoding, params, put_git_info=True):
         if put_git_info:
             content = add_git_info(content, get_git_info(fname))
         content = add_comments_block(content, script_info)
-        try:
-            content = content.format(**params)
-        except Exception as e:
-            logging.warning('error "{0}" occured during formating content of file: "{1}"'.format(e, fname))
+        if params:
+            try:
+                content = content.format(**params)
+            except Exception as e:
+                logging.warning(f'formating content of file: "{fname}" raises error "{e}"')
     return content, script_info
 
 
