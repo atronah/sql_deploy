@@ -196,6 +196,9 @@ def parse_file_names(source, settings):
             if not settings.has_option(section, 'scripts'):
                 continue
             for fname_pattern in settings[section]['scripts'].split('\n'):
+                if ';' in fname_pattern:
+                    print(f'skipping pattern with semicolon: "{fname_pattern}"')
+                    continue
                 for fname in glob.glob(fname_pattern):
                     yield fname
     else: #suggest, that source - it is file name or file name pattern
