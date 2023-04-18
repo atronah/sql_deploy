@@ -10,6 +10,19 @@ import shlex
 import glob
 import logging
 
+LOGGING_FORMAT = '[{asctime}] {levelname:.4} ({name}): {message}'
+LOGGING_FORMAT_STYPE = '{'
+
+logging.basicConfig(stream=sys.stdout, format=LOGGING_FORMAT, style=LOGGING_FORMAT_STYPE)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.setLevel(logging.WARNING)
+stderr_handler.setFormatter(logging.Formatter(LOGGING_FORMAT, style=LOGGING_FORMAT_STYPE))
+logger.addHandler(stderr_handler)
+
 
 
 class AttrDict(dict):
@@ -49,7 +62,7 @@ def get_git_info(obj_path):
             get_git_info.info_cache[obj_path] = result_lines[:2] + ['-'.join(result_lines[2:])]
         else:
             get_git_info.info_cache[obj_path] = '', '', ''
-            print(f'Incorrect git info for {obj_path}: {result_lines}, {workdir}')
+            logging.warning(f'Incorrect git info for {obj_path}: {result_lines}, {workdir}')
     last_changes_author, last_changes_date, last_changes_message = get_git_info.info_cache[obj_path]
 
     return {'sha': git_sha,
@@ -154,7 +167,7 @@ def add_comments_block(content, info):
 def prepareFileContent(fname, encoding, params, put_git_info=True):
     content = ''
     with open(fname, 'r', encoding=encoding) as f:
-        print('processing file: {}'.format(fname))
+        logging.info('processing file: {}'.format(fname))
 
         content = f.read()
         script_info, start, end = parse_sctipt_info(content)
@@ -165,7 +178,7 @@ def prepareFileContent(fname, encoding, params, put_git_info=True):
         try:
             content = content.format(**params)
         except Exception as e:
-            print('error "{0}" occured during formating content of file: "{1}"'.format(e, fname))
+            logging.warning('error "{0}" occured during formating content of file: "{1}"'.format(e, fname))
     return content, script_info
 
 
@@ -187,21 +200,25 @@ def drop_scripts(fname, encoding):
 def parse_file_names(source, settings):
     # if source it is rule (option from [general] section) with sections list, separated by comma
     if settings.has_option('general', source):
-        print('browsing rules {}'.format(source))
+        logging.info(f'processing rule "{source}" from `general` section')
         # for all sections in rule
         for section in settings['general'][source].split(','):
             section = section.strip()
-            #if section not containing 'scripts' option with file names (or file patterns), skip it
-            print('browsing section {}'.format(section))
+            logging.info(f'processing section {section}')
+
+            # if section doesn't contain 'scripts' option with file names (or file patterns), skip it
             if not settings.has_option(section, 'scripts'):
                 continue
             for fname_pattern in settings[section]['scripts'].split('\n'):
                 if ';' in fname_pattern:
-                    print(f'skipping pattern with semicolon: "{fname_pattern}"')
+                    logging.debug(f'skipping pattern with semicolon: "{fname_pattern}"')
                     continue
+
+                logging.info(f'processing pattern "{fname_pattern}"')
                 for fname in glob.glob(fname_pattern):
                     yield fname
     else: #suggest, that source - it is file name or file name pattern
+        logging.info(f'processing {source}')
         for fname in glob.glob(source):
             yield fname
 
@@ -244,6 +261,9 @@ def main():
     parser.add_argument('--no-git-info', dest='no_git_info', default=False, action='store_true',
                         help='Do not get git info to put into scripts')
 
+    parser.add_argument('--debug', dest='debug_mode', default=False, action='store_true',
+                        help='Shows extra info')
+
     options = parser.parse_args()
 
     template_file = os.path.abspath('template.md')
@@ -252,6 +272,9 @@ def main():
         os.chdir(options.dir)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
+
+    if options.debug_mode:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     docs_dir = os.path.join(out_dir, 'docs')
     if not os.path.isdir(docs_dir):
@@ -284,14 +307,14 @@ def main():
                     if doc_content:
                         with open(doc_fname, 'w', encoding = encoding) as doc:
                             doc.write(doc_content)
-                            print('created {}'.format(os.path.abspath(doc_fname)))
+                            logging.info('created {}'.format(os.path.abspath(doc_fname)))
 
-    print('created {}'.format(os.path.abspath(out_fullname)))
+    logging.info('created {}'.format(os.path.abspath(out_fullname)))
 
     drop_fullname = os.path.join(out_dir, 'drop_' + options.out)
     with open(drop_fullname, 'w', encoding = encoding) as o:
         o.write('\n'.join(drop_scripts(out_fullname, encoding)))
-    print('created {}'.format(os.path.abspath(drop_fullname)))
+    logging.info('created {}'.format(os.path.abspath(drop_fullname)))
 
     return 0
 
