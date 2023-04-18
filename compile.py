@@ -213,6 +213,8 @@ def parse_file_names(source, settings):
                 if ';' in fname_pattern:
                     logging.debug(f'skipping pattern with semicolon: "{fname_pattern}"')
                     continue
+                if not fname_pattern:
+                    continue
 
                 logging.info(f'processing pattern "{fname_pattern}"')
                 for fname in glob.glob(fname_pattern):
